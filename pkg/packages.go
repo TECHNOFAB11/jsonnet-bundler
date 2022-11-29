@@ -300,10 +300,12 @@ func download(d deps.Dependency, vendorDir, pathToParentModule string) (*deps.De
 		}
 
 		p = NewLocalPackage(&deps.Local{Directory: modulePath})
+	case d.Source.HttpSource != nil:
+		p = NewHttpPackage(d.Source.HttpSource)
 	}
 
 	if p == nil {
-		return nil, errors.New("either git or local source is required")
+		return nil, errors.New("either git, local or http source is required")
 	}
 
 	version, err := p.Install(context.TODO(), d.Name(), vendorDir, d.Version)

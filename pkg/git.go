@@ -15,9 +15,7 @@
 package pkg
 
 import (
-	"archive/tar"
 	"bytes"
-	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -81,89 +79,6 @@ func downloadGitHubArchive(filepath string, url string) error {
 	return nil
 }
 
-func gzipUntar(dst string, r io.Reader, subDir string) error {
-	gzr, err := gzip.NewReader(r)
-	if err != nil {
-		return err
-	}
-	defer gzr.Close()
-
-	tr := tar.NewReader(gzr)
-
-	for {
-		header, err := tr.Next()
-		switch {
-		case err == io.EOF:
-			return nil
-
-		case err != nil:
-			return err
-
-		case header == nil:
-			continue
-		}
-
-		// strip the two first components of the path
-		parts := strings.SplitAfterN(header.Name, "/", 2)
-		if len(parts) < 2 {
-			continue
-		}
-		suffix := parts[1]
-		prefix := dst
-
-		// reconstruct the target parh for the archive entry
-		target := filepath.Join(prefix, suffix)
-
-		// if subdir is provided and target is not under it, skip it
-		subDirPath := filepath.Join(prefix, subDir)
-		if subDir != "" && !strings.HasPrefix(target, subDirPath) {
-			continue
-		}
-
-		// check the file type
-		switch header.Typeflag {
-
-		// create directories as needed
-		case tar.TypeDir:
-			if err := os.MkdirAll(target, os.FileMode(header.Mode)); err != nil {
-				return err
-			}
-
-		case tar.TypeReg:
-			if err := os.MkdirAll(filepath.Dir(target), os.ModePerm); err != nil {
-				return err
-			}
-
-			err := func() error {
-				f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
-				if err != nil {
-					return err
-				}
-				defer f.Close()
-
-				// copy over contents
-				if _, err := io.Copy(f, tr); err != nil {
-					return err
-				}
-				return nil
-			}()
-
-			if err != nil {
-				return err
-			}
-
-		case tar.TypeSymlink:
-			if err := os.MkdirAll(filepath.Dir(target), os.ModePerm); err != nil {
-				return err
-			}
-
-			if err := os.Symlink(header.Linkname, target); err != nil {
-				return err
-			}
-		}
-	}
-}
-
 func remoteResolveRef(ctx context.Context, remote string, ref string) (string, error) {
 	b := &bytes.Buffer{}
 	cmd := exec.CommandContext(ctx, "git", "ls-remote", "--heads", "--tags", "--refs", "--quiet", remote, ref)
@@ -217,7 +132,7 @@ func (p *GitPackage) Install(ctx context.Context, name, dir, version string) (st
 			if err == nil {
 				// Extract the sub-directory (if any) from the archive
 				// If none specified, the entire archive is unpacked
-				err = gzipUntar(tmpDir, ar, p.Source.Subdir)
+				err = GzipUntar(tmpDir, ar, p.Source.Subdir)
 
 				// Move the extracted directory to its final destination
 				if err == nil {
