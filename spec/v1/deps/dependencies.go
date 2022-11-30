@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,6 +16,7 @@ package deps
 import (
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type Dependency struct {
@@ -38,7 +39,11 @@ func Parse(dir, uri string) *Dependency {
 		return d
 	}
 
-	return parseLocal(dir, uri)
+	if d := parseLocal(dir, uri); d != nil {
+		return d
+	}
+
+	return parseHttp(uri)
 }
 
 func (d Dependency) Name() string {
@@ -55,6 +60,7 @@ func (d Dependency) LegacyName() string {
 type Source struct {
 	GitSource   *Git   `json:"git,omitempty"`
 	LocalSource *Local `json:"local,omitempty"`
+	HttpSource  *Http  `json:"http,omitempty"`
 }
 
 func (s Source) Name() string {
@@ -62,6 +68,8 @@ func (s Source) Name() string {
 	case s.GitSource != nil:
 		return s.GitSource.Name()
 	case s.LocalSource != nil:
+		return s.LegacyName()
+	case s.HttpSource != nil:
 		return s.LegacyName()
 	default:
 		return ""
@@ -78,6 +86,16 @@ func (s Source) LegacyName() string {
 			panic("unable to create absolute path from local source directory: " + err.Error())
 		}
 		return filepath.Base(p)
+	case s.HttpSource != nil:
+		if s.HttpSource.Target != "" {
+			return s.HttpSource.Target
+		}
+
+		file := filepath.Base(s.HttpSource.Url)
+		if strings.Contains(file, ".tar.gz") {
+			return strings.TrimSuffix(file, ".tar.gz")
+		}
+		return strings.Replace(file, filepath.Ext(file), "", 1)
 	default:
 		return ""
 	}
@@ -104,6 +122,23 @@ func parseLocal(dir, p string) *Dependency {
 		Source: Source{
 			LocalSource: &Local{
 				Directory: clean,
+			},
+		},
+		Version: "",
+	}
+}
+
+type Http struct {
+	Url    string `json:"url"`
+	Target string `json:"target"`
+}
+
+func parseHttp(uri string) *Dependency {
+	return &Dependency{
+		Source: Source{
+			HttpSource: &Http{
+				Url:    uri,
+				Target: "",
 			},
 		},
 		Version: "",
