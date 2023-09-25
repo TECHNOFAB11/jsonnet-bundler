@@ -16,18 +16,9 @@ package pkg
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"fmt"
 	"github.com/jsonnet-bundler/jsonnet-bundler/spec/v1/deps"
-	"github.com/pkg/errors"
-	"io"
-	"io/ioutil"
-	"net/http"
 	"os"
 	"path"
-	"path/filepath"
-	"strings"
 )
 
 type HttpPackage struct {
@@ -40,66 +31,24 @@ func NewHttpPackage(source *deps.Http) Interface {
 	}
 }
 
-func downloadFile(filepath string, url string) error {
-	resp, err := http.Get(url)
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("unexpected status code %d", resp.StatusCode)
-	}
-
-	defer resp.Body.Close()
-
-	// Create the file
-	out, err := os.Create(filepath)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	// Write the body to file
-	_, err = io.Copy(out, resp.Body)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (h *HttpPackage) Install(ctx context.Context, name, dir, version string) (string, error) {
 	destPath := path.Join(dir, name)
 
-	pkgh := sha256.Sum256([]byte(fmt.Sprintf("jsonnetpkg-%s-%s", strings.Replace(name, "/", "-", -1), strings.Replace(version, "/", "-", -1))))
-	// using 16 bytes should be a good middle ground between length and collision resistance
-	tmpDir, err := ioutil.TempDir(filepath.Join(dir, ".tmp"), hex.EncodeToString(pkgh[:16]))
-	if err != nil {
-		return "", errors.Wrap(err, "failed to create tmp dir")
-	}
-	defer os.RemoveAll(tmpDir)
-
-	err = os.Setenv("VERSION", version)
+	err := os.Setenv("VERSION", version)
 	if err != nil {
 		return "", err
 	}
-	url := os.ExpandEnv(h.Source.Url)
+	packageUrl := os.ExpandEnv(h.Source.Url)
 
-	filename := filepath.Base(url)
-	err = downloadFile(path.Join(tmpDir, filename), url)
+	tmpDir, err := CreateTempDir(name, dir, version)
 	if err != nil {
-		return "", errors.Wrap(err, "failed to download file")
+		return "", err
 	}
+	defer os.RemoveAll(tmpDir)
 
-	var ar *os.File
-	ar, err = os.Open(path.Join(tmpDir, filename))
+	err = DownloadAndUntarTo(tmpDir, packageUrl, destPath)
 	if err != nil {
-		return "", errors.Wrap(err, "failed to open downloaded archive")
-	}
-	defer ar.Close()
-	err = GzipUntar(destPath, ar, "")
-	if err != nil {
-		return "", errors.Wrap(err, "failed to unpack downloaded archive")
+		return "", err
 	}
 
 	return version, nil

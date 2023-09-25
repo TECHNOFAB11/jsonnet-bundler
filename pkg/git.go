@@ -17,8 +17,6 @@ package pkg
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -97,11 +95,9 @@ func remoteResolveRef(ctx context.Context, remote string, ref string) (string, e
 func (p *GitPackage) Install(ctx context.Context, name, dir, version string) (string, error) {
 	destPath := path.Join(dir, name)
 
-	pkgh := sha256.Sum256([]byte(fmt.Sprintf("jsonnetpkg-%s-%s", strings.Replace(name, "/", "-", -1), strings.Replace(version, "/", "-", -1))))
-	// using 16 bytes should be a good middle ground between length and collision resistance
-	tmpDir, err := ioutil.TempDir(filepath.Join(dir, ".tmp"), hex.EncodeToString(pkgh[:16]))
+	tmpDir, err := CreateTempDir(name, dir, version)
 	if err != nil {
-		return "", errors.Wrap(err, "failed to create tmp dir")
+		return "", err
 	}
 	defer os.RemoveAll(tmpDir)
 

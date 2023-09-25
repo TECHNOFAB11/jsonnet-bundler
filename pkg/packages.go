@@ -302,10 +302,12 @@ func download(d deps.Dependency, vendorDir, pathToParentModule string) (*deps.De
 		p = NewLocalPackage(&deps.Local{Directory: modulePath})
 	case d.Source.HttpSource != nil:
 		p = NewHttpPackage(d.Source.HttpSource)
+	case d.Source.GitlabRegistrySource != nil:
+		p = NewGitlabRegistryPackage(d.Source.GitlabRegistrySource)
 	}
 
 	if p == nil {
-		return nil, errors.New("either git, local or http source is required")
+		return nil, errors.New("either git, local, http or gitlab source is required")
 	}
 
 	version, err := p.Install(context.TODO(), d.Name(), vendorDir, d.Version)

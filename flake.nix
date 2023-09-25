@@ -4,7 +4,7 @@
 
   outputs = { self, nixpkgs, systems }:
   let
-    version = "0.5.1";
+    version = "0.5.2";
     forEachSystem = nixpkgs.lib.genAttrs (import systems);
     nixpkgsFor = forEachSystem (system: import nixpkgs { inherit system; });
   in {

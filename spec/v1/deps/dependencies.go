@@ -14,6 +14,7 @@
 package deps
 
 import (
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,9 +59,10 @@ func (d Dependency) LegacyName() string {
 }
 
 type Source struct {
-	GitSource   *Git   `json:"git,omitempty"`
-	LocalSource *Local `json:"local,omitempty"`
-	HttpSource  *Http  `json:"http,omitempty"`
+	GitSource            *Git            `json:"git,omitempty"`
+	LocalSource          *Local          `json:"local,omitempty"`
+	HttpSource           *Http           `json:"http,omitempty"`
+	GitlabRegistrySource *GitlabRegistry `json:"gitlab,omitempty"`
 }
 
 func (s Source) Name() string {
@@ -70,7 +72,13 @@ func (s Source) Name() string {
 	case s.LocalSource != nil:
 		return s.LegacyName()
 	case s.HttpSource != nil:
-		return s.LegacyName()
+		parsed, err := url.Parse(s.HttpSource.Url)
+		if err != nil {
+			return "http/" + s.LegacyName()
+		}
+		return parsed.Hostname() + "/" + s.LegacyName()
+	case s.GitlabRegistrySource != nil:
+		return "gitlab.com/" + s.LegacyName()
 	default:
 		return ""
 	}
@@ -96,6 +104,8 @@ func (s Source) LegacyName() string {
 			return strings.TrimSuffix(file, ".tar.gz")
 		}
 		return strings.Replace(file, filepath.Ext(file), "", 1)
+	case s.GitlabRegistrySource != nil:
+		return s.GitlabRegistrySource.Package
 	default:
 		return ""
 	}
@@ -143,4 +153,11 @@ func parseHttp(uri string) *Dependency {
 		},
 		Version: "",
 	}
+}
+
+type GitlabRegistry struct {
+	Project  string `json:"project"`
+	Package  string `json:"package"`
+	Host     string `json:"host,omitempty"`
+	Filename string `json:"filename,omitempty"`
 }
